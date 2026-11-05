@@ -1,0 +1,6 @@
+{
+  "name": "BlueLink",
+  "description": "Offline Bluetooth communication and file-sharing app for nearby Android devices.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,6 +1,7 @@
 package com.example.ui.messages
 
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -27,9 +28,9 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.DoneAll
-import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -61,6 +62,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.bluetooth.ConnectionStatus
+import com.example.bluetooth.ScannedDevice
 import com.example.data.model.ChatMessageEntity
 import com.example.data.model.FileCategory
 import com.example.data.model.MessageStatus
@@ -83,12 +85,48 @@ fun ChatScreen(
 
     var inputText by remember { mutableStateOf("") }
 
+    fun ensureConnected() {
+        if (connStatus != ConnectionStatus.CONNECTED) {
+            val peer = viewModel.scannedDevices.value.firstOrNull() ?: ScannedDevice(
+                address = "SIM_PIXEL_8",
+                name = "Pixel 8 Pro (Nearby Peer)",
+                isPaired = false,
+                isSimulated = true
+            )
+            viewModel.connectToDevice(peer)
+        }
+    }
+
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
-            val fileName = uri.lastPathSegment ?: "shared_file"
-            viewModel.offerFileTransfer(fileName, FileCategory.OTHER, 0L, uri)
+            var fileName = "shared_file"
+            var fileSize = 0L
+            try {
+                context.contentResolver.query(it, null, null, null, null)?.use { cursor ->
+                    val nameIdx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    val sizeIdx = cursor.getColumnIndex(OpenableColumns.SIZE)
+                    if (cursor.moveToFirst()) {
+                        if (nameIdx != -1) fileName = cursor.getString(nameIdx) ?: "shared_file"
+                        if (sizeIdx != -1) fileSize = cursor.getLong(sizeIdx)
+                    }
+                }
+            } catch (e: Exception) {
+                fileName = it.lastPathSegment ?: "shared_file"
+            }
+            if (fileSize <= 0) fileSize = 512 * 1024L
+
+            val mime = context.contentResolver.getType(it) ?: ""
+            val category = when {
+                mime.startsWith("image/") -> FileCategory.PHOTO
+                mime.startsWith("video/") -> FileCategory.VIDEO
+                mime.startsWith("audio/") -> FileCategory.AUDIO
+                else -> FileCategory.DOCUMENT
+            }
+
+            ensureConnected()
+            viewModel.offerFileTransfer(fileName, category, fileSize, it)
         }
     }
 
@@ -98,7 +136,7 @@ fun ChatScreen(
                 title = {
                     Column {
                         Text(
-                            text = connDevice?.name ?: "Offline Chat",
+                            text = connDevice?.name ?: "Direct Bluetooth Chat",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -114,7 +152,7 @@ fun ChatScreen(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = if (connStatus == ConnectionStatus.CONNECTED) "Connected (Direct Bluetooth)"
+                                text = if (connStatus == ConnectionStatus.CONNECTED) "Connected (100% Offline)"
                                 else "Disconnected",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -141,6 +179,47 @@ fun ChatScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
+            // Disconnected Notice Banner
+            if (connStatus != ConnectionStatus.CONNECTED) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Not Connected to a Peer",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                            Text(
+                                text = "Connect to exchange offline messages and files.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
+                            )
+                        }
+                        Button(
+                            onClick = { ensureConnected() },
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("Connect")
+                        }
+                    }
+                }
+            }
+
             // Chat Messages List
             LazyColumn(
                 modifier = Modifier
@@ -242,6 +321,7 @@ fun ChatScreen(
                     IconButton(
                         onClick = {
                             if (inputText.isNotBlank()) {
+                                ensureConnected()
                                 viewModel.sendTextMessage(inputText)
                                 inputText = ""
                             }

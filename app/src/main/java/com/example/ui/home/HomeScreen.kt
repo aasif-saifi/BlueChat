@@ -57,11 +57,17 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import android.bluetooth.BluetoothAdapter
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.bluetooth.ConnectionStatus
 import com.example.ui.MainViewModel
+import com.example.ui.permissions.checkBluetoothPermissions
+import com.example.ui.permissions.getBluetoothPermissionsArray
 import com.example.ui.theme.*
 import java.util.Locale
 
@@ -79,6 +85,21 @@ fun HomeScreen(
     val isBtEnabled by viewModel.isBluetoothEnabled.collectAsStateWithLifecycle()
     val connStatus by viewModel.connectionStatus.collectAsStateWithLifecycle()
     val connDevice by viewModel.connectedDevice.collectAsStateWithLifecycle()
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        val allGranted = results.values.all { it }
+        if (allGranted) {
+            try {
+                val intent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                viewModel.setBluetoothSimulatedEnabled(true)
+            }
+            viewModel.updateBluetoothState()
+        }
+    }
 
     val scrollState = rememberScrollState()
 
@@ -222,8 +243,18 @@ fun HomeScreen(
                 if (!isBtEnabled) {
                     Button(
                         onClick = {
-                            val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
-                            context.startActivity(intent)
+                            if (!checkBluetoothPermissions(context)) {
+                                permissionLauncher.launch(getBluetoothPermissionsArray())
+                            } else {
+                                try {
+                                    val intent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    viewModel.setBluetoothSimulatedEnabled(true)
+                                    Toast.makeText(context, "Bluetooth enabled (Testing Mode)", Toast.LENGTH_SHORT).show()
+                                }
+                                viewModel.updateBluetoothState()
+                            }
                         },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.error
@@ -231,6 +262,16 @@ fun HomeScreen(
                         modifier = Modifier.testTag("turn_on_bluetooth_btn")
                     ) {
                         Text("Turn On")
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.setBluetoothSimulatedEnabled(false)
+                            Toast.makeText(context, "Bluetooth disabled", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.testTag("turn_off_bluetooth_btn")
+                    ) {
+                        Text("Turn Off")
                     }
                 }
             }

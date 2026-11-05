@@ -100,6 +100,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         repository.declineIncomingFile(fileId)
     }
 
+    fun setBluetoothSimulatedEnabled(enabled: Boolean) {
+        repository.setBluetoothSimulatedEnabled(enabled)
+    }
+
+    fun updateBluetoothState() {
+        repository.updateBluetoothState()
+    }
+
+    fun simulateIncomingOffer(name: String, category: FileCategory, sizeBytes: Long) {
+        repository.simulateIncomingOffer(name, category, sizeBytes)
+    }
+
     fun setTheme(theme: String) {
         viewModelScope.launch { repository.settings.setTheme(theme) }
     }

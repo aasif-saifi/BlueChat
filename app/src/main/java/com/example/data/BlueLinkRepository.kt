@@ -59,6 +59,12 @@ class BlueLinkRepository(val context: Context) {
     fun acceptIncomingFile(fileId: String) = connectionManager.acceptIncomingFile(fileId)
     fun declineIncomingFile(fileId: String) = connectionManager.declineIncomingFile(fileId)
 
+    fun setBluetoothSimulatedEnabled(enabled: Boolean) = bluetoothHelper.setBluetoothSimulatedEnabled(enabled)
+    fun updateBluetoothState() = bluetoothHelper.updateBluetoothState()
+
+    fun simulateIncomingOffer(name: String, category: FileCategory, sizeBytes: Long) =
+        connectionManager.simulateIncomingOffer(name, category, sizeBytes)
+
     suspend fun clearChatHistory() = chatDao.clearAllMessages()
     suspend fun clearTransferHistory() = transferDao.clearAllTransfers()
 }

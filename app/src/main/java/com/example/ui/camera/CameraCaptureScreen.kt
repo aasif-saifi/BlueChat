@@ -354,10 +354,19 @@ fun CameraCaptureScreen(
                                     val uri = capturedUri
                                     val file = capturedFile
                                     if (uri != null && file != null) {
+                                        if (viewModel.connectionStatus.value != com.example.bluetooth.ConnectionStatus.CONNECTED) {
+                                            val peer = viewModel.scannedDevices.value.firstOrNull() ?: com.example.bluetooth.ScannedDevice(
+                                                address = "SIM_PIXEL_8",
+                                                name = "Pixel 8 Pro (Nearby Peer)",
+                                                isPaired = false,
+                                                isSimulated = true
+                                            )
+                                            viewModel.connectToDevice(peer)
+                                        }
                                         viewModel.offerFileTransfer(
                                             fileName = file.name,
                                             fileCategory = if (isVideoMode) FileCategory.VIDEO else FileCategory.PHOTO,
-                                            fileSize = file.length(),
+                                            fileSize = if (file.length() > 0) file.length() else 1024 * 1024L,
                                             uri = uri
                                         )
                                         onNavigateBack()

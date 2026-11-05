@@ -42,8 +42,10 @@ data class BluetoothPacket(
     }
 
     companion object {
-        private val MAGIC = byteArrayOf('B'.code.toByte(), 'L'.code.toByte())
-        private const val HEADER_SIZE = 2 + 1 + 36 + 4 + 8 // 51 bytes header
+        private const val MAGIC_BYTE_1 = 'B'.code.toByte()
+        private const val MAGIC_BYTE_2 = 'L'.code.toByte()
+        // Header after magic: 1 (type) + 36 (fileId) + 4 (length) + 8 (checksum) = 49 bytes
+        private const val HEADER_BODY_SIZE = 1 + 36 + 4 + 8
 
         fun writeToStream(output: OutputStream, packet: BluetoothPacket) {
             val fileIdBytes = ByteArray(36)
@@ -54,8 +56,10 @@ data class BluetoothPacket(
             crc.update(packet.payload)
             val checksum = crc.value
 
-            val buffer = ByteBuffer.allocate(HEADER_SIZE + packet.payload.size)
-            buffer.put(MAGIC)
+            val totalSize = 2 + HEADER_BODY_SIZE + packet.payload.size
+            val buffer = ByteBuffer.allocate(totalSize)
+            buffer.put(MAGIC_BYTE_1)
+            buffer.put(MAGIC_BYTE_2)
             buffer.put(packet.type)
             buffer.put(fileIdBytes)
             buffer.putInt(packet.payload.size)
@@ -67,22 +71,28 @@ data class BluetoothPacket(
         }
 
         fun readFromStream(input: InputStream): BluetoothPacket? {
-            val headerBuffer = ByteArray(HEADER_SIZE)
+            // Find and synchronize on MAGIC bytes 'B', 'L'
+            while (true) {
+                val b = input.read()
+                if (b == -1) return null
+                if (b.toByte() == MAGIC_BYTE_1) {
+                    val next = input.read()
+                    if (next == -1) return null
+                    if (next.toByte() == MAGIC_BYTE_2) {
+                        break // Synchronized on MAGIC!
+                    }
+                }
+            }
+
+            val headerBuffer = ByteArray(HEADER_BODY_SIZE)
             var bytesRead = 0
-            while (bytesRead < HEADER_SIZE) {
-                val read = input.read(headerBuffer, bytesRead, HEADER_SIZE - bytesRead)
-                if (read == -1) return null // Stream closed
+            while (bytesRead < HEADER_BODY_SIZE) {
+                val read = input.read(headerBuffer, bytesRead, HEADER_BODY_SIZE - bytesRead)
+                if (read == -1) return null
                 bytesRead += read
             }
 
             val buffer = ByteBuffer.wrap(headerBuffer)
-            val m1 = buffer.get()
-            val m2 = buffer.get()
-            if (m1 != 'B'.code.toByte() || m2 != 'L'.code.toByte()) {
-                // Invalid magic, unsynced stream
-                return null
-            }
-
             val type = buffer.get()
             val fileIdBytes = ByteArray(36)
             buffer.get(fileIdBytes)
@@ -90,7 +100,7 @@ data class BluetoothPacket(
             val payloadLen = buffer.getInt()
             val checksum = buffer.getLong()
 
-            if (payloadLen < 0 || payloadLen > 10 * 1024 * 1024) { // Max 10MB chunk sanity check
+            if (payloadLen < 0 || payloadLen > 10 * 1024 * 1024) {
                 return null
             }
 
@@ -102,11 +112,9 @@ data class BluetoothPacket(
                 payloadRead += read
             }
 
-            // Verify checksum
             val crc = CRC32()
             crc.update(payload)
             if (crc.value != checksum) {
-                // Checksum mismatch
                 return null
             }
 

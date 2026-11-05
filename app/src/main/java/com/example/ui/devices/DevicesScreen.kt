@@ -3,6 +3,9 @@ package com.example.ui.devices
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.content.Intent
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -10,7 +13,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,21 +29,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.BluetoothConnected
 import androidx.compose.material.icons.filled.BluetoothSearching
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -50,7 +49,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -59,6 +57,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.bluetooth.ConnectionStatus
 import com.example.bluetooth.ScannedDevice
 import com.example.ui.MainViewModel
+import com.example.ui.permissions.checkBluetoothPermissions
+import com.example.ui.permissions.getBluetoothPermissionsArray
 
 @SuppressLint("MissingPermission")
 @Composable
@@ -71,6 +71,17 @@ fun DevicesScreen(
     val devices by viewModel.scannedDevices.collectAsStateWithLifecycle()
     val connStatus by viewModel.connectionStatus.collectAsStateWithLifecycle()
     val connectedDev by viewModel.connectedDevice.collectAsStateWithLifecycle()
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        val allGranted = results.values.all { it }
+        if (allGranted) {
+            viewModel.startScan()
+        } else {
+            Toast.makeText(context, "Bluetooth scan permissions required", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     val pairedDevices = devices.filter { it.isPaired }
     val availableDevices = devices.filter { !it.isPaired }
@@ -151,7 +162,11 @@ fun DevicesScreen(
                 ) {
                     Button(
                         onClick = {
-                            if (isScanning) viewModel.stopScan() else viewModel.startScan()
+                            if (!checkBluetoothPermissions(context)) {
+                                permissionLauncher.launch(getBluetoothPermissionsArray())
+                            } else {
+                                if (isScanning) viewModel.stopScan() else viewModel.startScan()
+                            }
                         },
                         modifier = Modifier
                             .weight(1f)
@@ -165,10 +180,14 @@ fun DevicesScreen(
 
                     OutlinedButton(
                         onClick = {
-                            val discoverableIntent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
-                                putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
+                            try {
+                                val discoverableIntent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
+                                    putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
+                                }
+                                context.startActivity(discoverableIntent)
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Device made visible to nearby peers", Toast.LENGTH_SHORT).show()
                             }
-                            context.startActivity(discoverableIntent)
                         },
                         modifier = Modifier
                             .weight(1f)
@@ -204,6 +223,7 @@ fun DevicesScreen(
                         address = connectedDev?.address ?: "",
                         isPaired = true,
                         isConnected = true,
+                        isConnecting = false,
                         onConnectClick = { onNavigateToChat() },
                         onDisconnectClick = { viewModel.disconnect() }
                     )
@@ -230,11 +250,13 @@ fun DevicesScreen(
             } else {
                 items(pairedDevices) { device ->
                     val isThisConnected = connectedDev?.address == device.address
+                    val isThisConnecting = connStatus == ConnectionStatus.CONNECTING && connectedDev?.address == device.address
                     DeviceItemCard(
                         name = device.name,
                         address = device.address,
                         isPaired = true,
                         isConnected = isThisConnected,
+                        isConnecting = isThisConnecting,
                         onConnectClick = {
                             if (isThisConnected) onNavigateToChat()
                             else viewModel.connectToDevice(device)
@@ -256,20 +278,26 @@ fun DevicesScreen(
             if (availableDevices.isEmpty()) {
                 item {
                     Text(
-                        text = if (isScanning) "Searching..." else "Tap 'Start Scan' to discover nearby phones.",
+                        text = if (isScanning) "Searching for nearby devices..." else "Tap 'Start Scan' to discover nearby phones.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             } else {
                 items(availableDevices) { device ->
+                    val isThisConnected = connectedDev?.address == device.address
+                    val isThisConnecting = connStatus == ConnectionStatus.CONNECTING && connectedDev?.address == device.address
                     DeviceItemCard(
                         name = device.name,
                         address = device.address,
                         isPaired = false,
-                        isConnected = false,
-                        onConnectClick = { viewModel.connectToDevice(device) },
-                        onDisconnectClick = { }
+                        isConnected = isThisConnected,
+                        isConnecting = isThisConnecting,
+                        onConnectClick = {
+                            if (isThisConnected) onNavigateToChat()
+                            else viewModel.connectToDevice(device)
+                        },
+                        onDisconnectClick = { viewModel.disconnect() }
                     )
                 }
             }
@@ -283,6 +311,7 @@ fun DeviceItemCard(
     address: String,
     isPaired: Boolean,
     isConnected: Boolean,
+    isConnecting: Boolean = false,
     onConnectClick: () -> Unit,
     onDisconnectClick: () -> Unit
 ) {
@@ -332,7 +361,7 @@ fun DeviceItemCard(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = if (isConnected) "Connected" else if (isPaired) "Paired" else "Available",
+                        text = if (isConnecting) "Connecting..." else if (isConnected) "Connected" else if (isPaired) "Paired" else "Available",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -340,12 +369,22 @@ fun DeviceItemCard(
             }
 
             if (isConnected) {
-                Button(
-                    onClick = onConnectClick,
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Text("Chat")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = onConnectClick,
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("Chat")
+                    }
+                    OutlinedButton(
+                        onClick = onDisconnectClick,
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("Disconnect")
+                    }
                 }
+            } else if (isConnecting) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
             } else {
                 Button(
                     onClick = onConnectClick,

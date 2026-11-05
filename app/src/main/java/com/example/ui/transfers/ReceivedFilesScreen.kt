@@ -193,7 +193,16 @@ fun ReceivedFilesScreen(viewModel: MainViewModel) {
                                     onClick = {
                                         item.localUri?.let { uriStr ->
                                             try {
-                                                val uri = Uri.parse(uriStr)
+                                                val saveFile = File(context.getExternalFilesDir(null), "BlueLink/Received/${item.fileName}")
+                                                val uri = if (saveFile.exists()) {
+                                                    androidx.core.content.FileProvider.getUriForFile(
+                                                        context,
+                                                        "${context.packageName}.fileprovider",
+                                                        saveFile
+                                                    )
+                                                } else {
+                                                    Uri.parse(uriStr)
+                                                }
                                                 val intent = Intent(Intent.ACTION_VIEW).apply {
                                                     setDataAndType(uri, "*/*")
                                                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -213,7 +222,16 @@ fun ReceivedFilesScreen(viewModel: MainViewModel) {
                                     onClick = {
                                         item.localUri?.let { uriStr ->
                                             try {
-                                                val uri = Uri.parse(uriStr)
+                                                val saveFile = File(context.getExternalFilesDir(null), "BlueLink/Received/${item.fileName}")
+                                                val uri = if (saveFile.exists()) {
+                                                    androidx.core.content.FileProvider.getUriForFile(
+                                                        context,
+                                                        "${context.packageName}.fileprovider",
+                                                        saveFile
+                                                    )
+                                                } else {
+                                                    Uri.parse(uriStr)
+                                                }
                                                 val intent = Intent(Intent.ACTION_SEND).apply {
                                                     putExtra(Intent.EXTRA_STREAM, uri)
                                                     type = "*/*"

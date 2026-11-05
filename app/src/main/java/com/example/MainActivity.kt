@@ -104,12 +104,17 @@ fun BlueLinkApp(viewModel: MainViewModel) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    var showPermissionDialog by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var showPermissionDialog by remember {
+        mutableStateOf(!com.example.ui.permissions.checkBluetoothPermissions(context))
+    }
 
     PermissionHandler(
         showDialog = showPermissionDialog,
         onDismiss = { showPermissionDialog = false },
-        onPermissionsGranted = { }
+        onPermissionsGranted = {
+            viewModel.updateBluetoothState()
+        }
     )
 
     val bottomNavItems = listOf(

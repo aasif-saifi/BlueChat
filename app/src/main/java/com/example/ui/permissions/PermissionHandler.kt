@@ -11,11 +11,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 
@@ -25,8 +21,6 @@ fun PermissionHandler(
     onDismiss: () -> Unit,
     onPermissionsGranted: () -> Unit
 ) {
-    val context = LocalContext.current
-
     val requiredPermissions = remember {
         val list = mutableListOf(
             Manifest.permission.CAMERA,
@@ -39,6 +33,7 @@ fun PermissionHandler(
             list.add(Manifest.permission.BLUETOOTH_ADVERTISE)
         } else {
             list.add(Manifest.permission.ACCESS_FINE_LOCATION)
+            list.add(Manifest.permission.ACCESS_COARSE_LOCATION)
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -85,6 +80,32 @@ fun PermissionHandler(
     }
 }
 
+fun checkBluetoothPermissions(context: Context): Boolean {
+    val permissions = mutableListOf<String>()
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        permissions.add(Manifest.permission.BLUETOOTH_SCAN)
+        permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
+    } else {
+        permissions.add(Manifest.permission.ACCESS_FINE_LOCATION)
+    }
+    return permissions.all {
+        ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+    }
+}
+
+fun getBluetoothPermissionsArray(): Array<String> {
+    val list = mutableListOf<String>()
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        list.add(Manifest.permission.BLUETOOTH_SCAN)
+        list.add(Manifest.permission.BLUETOOTH_CONNECT)
+        list.add(Manifest.permission.BLUETOOTH_ADVERTISE)
+    } else {
+        list.add(Manifest.permission.ACCESS_FINE_LOCATION)
+        list.add(Manifest.permission.ACCESS_COARSE_LOCATION)
+    }
+    return list.toTypedArray()
+}
+
 fun checkAllPermissionsGranted(context: Context): Boolean {
     val permissions = mutableListOf(
         Manifest.permission.CAMERA,
@@ -93,6 +114,8 @@ fun checkAllPermissionsGranted(context: Context): Boolean {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         permissions.add(Manifest.permission.BLUETOOTH_SCAN)
         permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
+    } else {
+        permissions.add(Manifest.permission.ACCESS_FINE_LOCATION)
     }
     return permissions.all {
         ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED

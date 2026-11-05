@@ -8,7 +8,8 @@ data class ScannedDevice(
     val isPaired: Boolean,
     val deviceType: String = "Mobile Device",
     val rssi: Int = 0,
-    val nativeDevice: BluetoothDevice? = null
+    val nativeDevice: BluetoothDevice? = null,
+    val isSimulated: Boolean = false
 )
 
 enum class ConnectionStatus {
@@ -25,5 +26,6 @@ data class ConnectedDeviceInfo(
     val address: String,
     val name: String,
     val connectedDurationMs: Long = 0,
-    val status: ConnectionStatus = ConnectionStatus.DISCONNECTED
+    val status: ConnectionStatus = ConnectionStatus.DISCONNECTED,
+    val isSimulated: Boolean = false
 )

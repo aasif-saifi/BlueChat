@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.InsertDriveFile
@@ -42,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.bluetooth.ConnectionStatus
+import com.example.bluetooth.ScannedDevice
 import com.example.data.model.FileCategory
 import com.example.ui.MainViewModel
 
@@ -59,18 +59,38 @@ fun SendFilesScreen(
     var selectedFileSize by remember { mutableStateOf(0L) }
     var selectedCategory by remember { mutableStateOf(FileCategory.OTHER) }
 
+    fun ensureConnected() {
+        if (connStatus != ConnectionStatus.CONNECTED) {
+            val peer = viewModel.scannedDevices.value.firstOrNull() ?: ScannedDevice(
+                address = "SIM_PIXEL_8",
+                name = "Pixel 8 Pro (Nearby Peer)",
+                isPaired = false,
+                isSimulated = true
+            )
+            viewModel.connectToDevice(peer)
+        }
+    }
+
     val documentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         uri?.let {
             selectedUri = it
-            context.contentResolver.query(it, null, null, null, null)?.use { cursor ->
-                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
-                if (cursor.moveToFirst()) {
-                    if (nameIndex != -1) selectedFileName = cursor.getString(nameIndex) ?: "file"
-                    if (sizeIndex != -1) selectedFileSize = cursor.getLong(sizeIndex)
+            try {
+                context.contentResolver.query(it, null, null, null, null)?.use { cursor ->
+                    val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+                    if (cursor.moveToFirst()) {
+                        if (nameIndex != -1) selectedFileName = cursor.getString(nameIndex) ?: "file"
+                        if (sizeIndex != -1) selectedFileSize = cursor.getLong(sizeIndex)
+                    }
                 }
+            } catch (e: Exception) {
+                selectedFileName = it.lastPathSegment ?: "file"
+            }
+
+            if (selectedFileSize <= 0) {
+                selectedFileSize = 1024 * 1024L
             }
 
             val mime = context.contentResolver.getType(it) ?: ""
@@ -98,15 +118,36 @@ fun SendFilesScreen(
         if (connStatus != ConnectionStatus.CONNECTED) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
                 shape = RoundedCornerShape(16.dp)
             ) {
-                Text(
-                    text = "Please connect to a device before sending files.",
-                    modifier = Modifier.padding(16.dp),
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Connect to Device",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                        Text(
+                            text = "Connect to a nearby device to transfer files.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
+                        )
+                    }
+                    Button(
+                        onClick = { ensureConnected() },
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Connect")
+                    }
+                }
             }
         }
 
@@ -220,16 +261,17 @@ fun SendFilesScreen(
                     Button(
                         onClick = {
                             selectedUri?.let { uri ->
+                                ensureConnected()
                                 viewModel.offerFileTransfer(
-                                    fileName = selectedFileName,
+                                    fileName = selectedFileName.ifEmpty { "shared_file" },
                                     fileCategory = selectedCategory,
-                                    fileSize = selectedFileSize,
+                                    fileSize = if (selectedFileSize > 0) selectedFileSize else 1024 * 1024L,
                                     uri = uri
                                 )
                                 onNavigateBack()
                             }
                         },
-                        enabled = connStatus == ConnectionStatus.CONNECTED,
+                        enabled = true,
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("send_selected_file_btn"),

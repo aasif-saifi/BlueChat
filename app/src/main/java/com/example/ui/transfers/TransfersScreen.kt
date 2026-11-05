@@ -196,11 +196,31 @@ fun TransfersScreen(viewModel: MainViewModel) {
                 fontWeight = FontWeight.Bold
             )
 
-            IconButton(
-                onClick = { viewModel.clearTransfers() },
-                modifier = Modifier.testTag("clear_history_btn")
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(Icons.Default.DeleteSweep, contentDescription = "Clear History")
+                OutlinedButton(
+                    onClick = {
+                        viewModel.simulateIncomingOffer(
+                            name = "Project_File_${System.currentTimeMillis() % 1000}.pdf",
+                            category = FileCategory.DOCUMENT,
+                            sizeBytes = 1200 * 1024L
+                        )
+                    },
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Test Offer")
+                }
+
+                IconButton(
+                    onClick = { viewModel.clearTransfers() },
+                    modifier = Modifier.testTag("clear_history_btn")
+                ) {
+                    Icon(Icons.Default.DeleteSweep, contentDescription = "Clear History")
+                }
             }
         }
 
